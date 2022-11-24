@@ -49,6 +49,9 @@
   #include "../../module/tool_change.h"
 #endif
 
+#define DEBUG_OUT true
+#include "../../core/debug_out.h"
+
 /**
  * M104: Set Hotend Temperature target and return immediately
  * M109: Set Hotend Temperature target and wait
@@ -109,11 +112,29 @@ void GcodeSuite::M104_M109(const bool isM109) {
       thermalManager.singlenozzle_temp[target_extruder] = temp;
       if (target_extruder != active_extruder) return;
     #endif
+    
+	#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+		// don't preheat other nozzles above INACTIVE_EXTRUDER_MAXTEMP
+		if (target_extruder != active_extruder
+			&& temp > INACTIVE_EXTRUDER_MAXTEMP)
+		{
+			// limit requested temp to INACTIVE_EXTRUDER_MAXTEMP but cache the desired temp to be applied during tool_change.cpp
+			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", temp, " replacement:", INACTIVE_EXTRUDER_MAXTEMP);
+			thermalManager.cache_target_temp(target_extruder, temp);
+			temp = INACTIVE_EXTRUDER_MAXTEMP;
+		}
+		else
+		{
+			DEBUG_ECHOLNPGM("Honoring heat request: E", target_extruder);
+			thermalManager.clear_cached_target_temp(target_extruder);
+		}
+	#endif
+
     thermalManager.setTargetHotend(temp, target_extruder);
 
     #if ENABLED(DUAL_X_CARRIAGE)
-      if (idex_is_duplicating() && target_extruder == 0)
-        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
+      if (idex_is_duplicating() && idex_get_carriage(target_extruder) == 0)
+        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, idex_get_duplication_extruder(target_extruder));
     #endif
 
     #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
@@ -132,7 +153,15 @@ void GcodeSuite::M104_M109(const bool isM109) {
   TERN_(AUTOTEMP, planner.autotemp_M104_M109());
 
   if (isM109 && got_temp)
-    (void)thermalManager.wait_for_hotend(target_extruder, no_wait_for_cooling);
+  {
+	  (void)thermalManager.wait_for_hotend(target_extruder, no_wait_for_cooling);
+    #if ENABLED(DUAL_X_CARRIAGE)
+      if (idex_is_duplicating())
+    	{
+			  thermalManager.wait_for_hotend(idex_get_duplication_extruder(target_extruder), no_wait_for_cooling);
+		  }
+    #endif
+  }
 }
 
 #endif // EXTRUDERS

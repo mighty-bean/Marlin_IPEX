@@ -2239,6 +2239,10 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
     #error "DUAL_X_CARRIAGE requires X2_HOME_POS, X2_MIN_POS, and X2_MAX_POS."
   #elif X_HOME_TO_MAX || X2_HOME_TO_MIN
     #error "DUAL_X_CARRIAGE requires X_HOME_DIR -1 and X2_HOME_DIR 1."
+  #elif EXTRUDERS & 1
+    #error "DUAL_X_CARRIAGE requires an even number of extruders"
+  #elif (EXTRUDERS_PER_CARRIAGE*2) != EXTRUDERS
+    #error "EXTRUDERS_PER_CARRIAGE must be half the EXTRUDERS count"
   #endif
 #endif
 

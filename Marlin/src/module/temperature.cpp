@@ -208,6 +208,9 @@
   static constexpr uint8_t heater_ttbllen_map[HOTENDS] = ARRAY_BY_HOTENDS(TEMPTABLE_0_LEN REPEAT_S(1, HOTENDS, NEXT_TEMPTABLE_LEN));
 #endif
 
+#define DEBUG_OUT true
+#include "../core/debug_out.h"
+
 Temperature thermalManager;
 
 PGMSTR(str_t_thermal_runaway, STR_T_THERMAL_RUNAWAY);
@@ -697,7 +700,6 @@ volatile bool Temperature::raw_temps_ready = false;
       const millis_t ms = millis();
 
       if (updateTemperaturesIfReady()) { // temp sample ready
-
         // Get the current temperature and constrain it
         current_temp = GHV(degChamber(), degBed(), degHotend(heater_id));
         NOLESS(maxT, current_temp);
@@ -783,11 +785,15 @@ volatile bool Temperature::raw_temps_ready = false;
                 temp_change_ms = ms + SEC_TO_MS(watch_temp_period);   // - move the expiration timer up
                 if (current_temp > watch_temp_target) heated = true;  // - Flag if target temperature reached
               }
-              else if (ELAPSED(ms, temp_change_ms))                   // Watch timer expired
+              else if (ELAPSED(ms, temp_change_ms)) {                  // Watch timer expired
+			  	      DEBUG_ECHOLNPGM("PID Heat Fail: T", heater_id, " expected:", (int)next_watch_temp, " actual:", (int)current_temp);
                 _temp_error(heater_id, FPSTR(str_t_heating_failed), GET_TEXT_F(MSG_HEATING_FAILED_LCD));
+              }
             }
-            else if (current_temp < target - (MAX_OVERSHOOT_PID_AUTOTUNE)) // Heated, then temperature fell too far?
+            else if (current_temp < target - (MAX_OVERSHOOT_PID_AUTOTUNE)) {// Heated, then temperature fell too far?
+			  	      DEBUG_ECHOLNPGM("PID Temp Drop: T", heater_id, " expected:", (int)target, " actual:", (int)current_temp);
               _temp_error(heater_id, FPSTR(str_t_thermal_runaway), GET_TEXT_F(MSG_THERMAL_RUNAWAY));
+            }
           }
         #endif
       } // every 2 seconds
@@ -1561,9 +1567,27 @@ void Temperature::min_temp_error(const heater_id_t heater_id) {
         // Make sure temperature is increasing
         if (watch_hotend[e].elapsed(ms)) {          // Enabled and time to check?
           if (watch_hotend[e].check(degHotend(e)))  // Increased enough?
+          {
             start_watching_hotend(e);               // If temp reached, turn off elapsed check
+			  	  
+            DEBUG_ECHOLNPGM("watch_hotend success: T", e);
+			      DEBUG_ECHOLNPGM("watch_hotend current: ", degHotend(e));
+            
+            if(watch_hotend[e].next_ms > 0)
+            {
+              DEBUG_ECHOLNPGM("watch_hotend next target: ", watch_hotend[e].target); 
+            }
+            else
+            {
+              DEBUG_ECHOLNPGM("watch_hotend complete: T", e);
+            }
+          }
           else {
             TERN_(HAS_DWIN_E3V2_BASIC, DWIN_Popup_Temperature(0));
+            DEBUG_ECHOLNPGM("watch_hotend expired: T", e);
+            DEBUG_ECHOLNPGM("watch_hotend current: ", degHotend(e));
+            DEBUG_ECHOLNPGM("watch_hotend target: ", watch_hotend[e].target);
+            DEBUG_ECHOLNPGM("watch_hotend real target: ", degTargetHotend(e));
             _temp_error((heater_id_t)e, FPSTR(str_t_heating_failed), GET_TEXT_F(MSG_HEATING_FAILED_LCD));
           }
         }
@@ -4552,3 +4576,44 @@ void Temperature::isr() {
   #endif // HAS_COOLER
 
 #endif // HAS_TEMP_SENSOR
+
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+celsius_t Temperature::hotend_cached_temp[HOTENDS] = {0};
+
+//static const celsius_t hotend_cached_preheat[HOTENDS];
+void Temperature::cache_target_temp(const int8_t heater_id, celsius_t temp)
+{
+	hotend_cached_temp[heater_id] = temp;
+}
+
+celsius_t Temperature::get_cached_target_temp(const int8_t heater_id)
+{
+	return hotend_cached_temp[heater_id]; // 0 if unused
+}
+
+void Temperature::clear_cached_target_temp(const int8_t heater_id)
+{
+	hotend_cached_temp[heater_id] = 0;
+}
+
+celsius_t Temperature::read_and_clear_cached_target_temp(const int8_t heater_id)
+{
+	celsius_t value = get_cached_target_temp(heater_id);
+  cache_target_temp(heater_id, 0);
+  return value;
+}
+
+void Temperature::log_cached_target_temps()
+{
+  HOTEND_LOOP() {
+    DEBUG_ECHOLNPGM("cache_log: T", e, " c:", hotend_cached_temp[e]);
+  }
+}
+
+void Temperature::clear_cached_target_temps()
+{
+  HOTEND_LOOP() {
+    clear_cached_target_temp(e);
+  }
+}
+#endif

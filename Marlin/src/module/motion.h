@@ -597,12 +597,14 @@ void home_if_needed(const bool keeplev=false);
 
   float x_home_pos(const uint8_t extruder);
 
-  #define TOOL_X_HOME_DIR(T) ((T) ? X2_HOME_DIR : X_HOME_DIR)
+  #define TOOL_X_HOME_DIR(T) (idex_get_carriage(T) ? X2_HOME_DIR : X_HOME_DIR)
 
   void set_duplication_enabled(const bool dupe, const int8_t tool_index=-1);
   void idex_set_mirrored_mode(const bool mirr);
   void idex_set_parked(const bool park=true);
 
+  uint8_t idex_get_carriage(const uint8_t extruder_index);
+  uint8_t idex_get_duplication_extruder(const uint8_t extruder_index);
 #else
 
   #if ENABLED(MULTI_NOZZLE_DUPLICATION)

@@ -93,6 +93,11 @@ void GcodeSuite::M303() {
     KEEPALIVE_STATE(NOT_BUSY);
   #endif
 
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	// no preheat caching during PID
+	thermalManager.clear_cached_target_temps();
+#endif
+
   LCD_MESSAGE(MSG_PID_AUTOTUNE);
   thermalManager.PID_autotune(temp, hid, c, u);
   ui.reset_status();

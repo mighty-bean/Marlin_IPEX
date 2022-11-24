@@ -31,7 +31,7 @@
   #include "../../feature/mmu/mmu2.h"
 #endif
 
-#define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
+#define DEBUG_OUT 1//ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../../core/debug_out.h"
 
 /**

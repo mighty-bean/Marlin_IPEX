@@ -59,7 +59,12 @@
  *           3-255 = Set the speed for use with T2
  */
 void GcodeSuite::M106() {
-  const uint8_t pfan = parser.byteval('P', _ALT_P);
+  uint8_t pfan = parser.byteval('P', _ALT_P);
+
+  #ifdef ONE_COOLING_FAN_PER_CARRIAGE
+    pfan = idex_get_carriage(pfan);
+  #endif
+
   if (pfan >= _CNT_P) return;
   #if REDUNDANT_PART_COOLING_FAN
     if (pfan == REDUNDANT_PART_COOLING_FAN) return;
@@ -100,7 +105,12 @@ void GcodeSuite::M106() {
  * M107: Fan Off
  */
 void GcodeSuite::M107() {
-  const uint8_t pfan = parser.byteval('P', _ALT_P);
+  uint8_t pfan = parser.byteval('P', _ALT_P);
+ 
+  #ifdef ONE_COOLING_FAN_PER_CARRIAGE
+    pfan = idex_get_carriage(pfan);
+  #endif
+
   if (pfan >= _CNT_P) return;
   #if REDUNDANT_PART_COOLING_FAN
     if (pfan == REDUNDANT_PART_COOLING_FAN) return;

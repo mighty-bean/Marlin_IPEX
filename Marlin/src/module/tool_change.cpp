@@ -30,11 +30,12 @@
 #include "temperature.h"
 
 #include "../MarlinCore.h"
+#include "endstops.h"
 
-//#define DEBUG_TOOL_CHANGE
-//#define DEBUG_TOOLCHANGE_FILAMENT_SWAP
+#define DEBUG_TOOL_CHANGE
+#define DEBUG_TOOLCHANGE_FILAMENT_SWAP
 
-#define DEBUG_OUT ENABLED(DEBUG_TOOL_CHANGE)
+#define DEBUG_OUT true
 #include "../core/debug_out.h"
 
 #if HAS_MULTI_EXTRUDER
@@ -833,6 +834,61 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 
 #if ENABLED(DUAL_X_CARRIAGE)
 
+  void home_and_clean()
+  {
+	// Force homing on every tool change
+	remember_feedrate_scaling_off();
+	endstops.enable(true); // Enable endstops for next homing move
+	homeaxis(X_AXIS);
+	endstops.not_homing();
+	sync_plan_position();
+  	// Clear endstop state for polled stallGuard endstops
+  	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
+	restore_feedrate_and_scaling();
+	set_axis_is_at_home(X_AXIS);
+
+	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
+#if TOOL_CHANGE_CLEANING_SWIPES > 0
+    const float xhome = x_home_pos(active_extruder);
+	float CleaningNearPoint = xhome;
+	float CleaningFarPoint = xhome;
+	if (xhome < (X_BED_SIZE >> 1))
+	{
+		CleaningNearPoint = xhome + TOOL_CHANGE_CLEANING_NEAR_OFFSET;
+		CleaningFarPoint = xhome + TOOL_CHANGE_CLEANING_FAR_OFFSET;
+	}
+	else
+	{
+		CleaningNearPoint = xhome - TOOL_CHANGE_CLEANING_NEAR_OFFSET;
+		CleaningFarPoint = xhome - TOOL_CHANGE_CLEANING_FAR_OFFSET;
+	}
+
+	for (int Swipe=0; Swipe < TOOL_CHANGE_CLEANING_SWIPES; ++Swipe) {
+		// move fast to initial cleaning position near home
+		current_position.x = CleaningFarPoint;
+		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
+		planner.synchronize();
+
+		// move fast back and forth over the cleaning brush
+		current_position.x = CleaningNearPoint;
+		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
+		planner.synchronize();
+	}
+
+	// re-home after cleaning
+	remember_feedrate_scaling_off();
+	endstops.enable(true); // Enable endstops for next homing move
+	homeaxis(X_AXIS);
+	endstops.not_homing();
+	sync_plan_position();
+  	// Clear endstop state for polled stallGuard endstops
+  	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
+	restore_feedrate_and_scaling();
+	set_axis_is_at_home(X_AXIS);
+#endif
+
+ }
+
   /**
    * @brief Dual X Tool Change
    * @details Change tools, with extra behavior based on current mode
@@ -842,6 +898,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
    */
   inline void dualx_tool_change(const uint8_t new_tool, bool &no_move) {
 
+	const uint8_t previous_extruder = active_extruder;
     DEBUG_ECHOPGM("Dual X Carriage Mode ");
     switch (dual_x_carriage_mode) {
       case DXC_FULL_CONTROL_MODE: DEBUG_ECHOLNPGM("FULL_CONTROL"); break;
@@ -850,21 +907,75 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
       case DXC_MIRRORED_MODE:     DEBUG_ECHOLNPGM("MIRRORED");     break;
     }
 
-    // Get the home position of the currently-active tool
-    const float xhome = x_home_pos(active_extruder);
+    // Get the home position of the previous_extrudercache_preheat
+    const float xhome = x_home_pos(previous_extruder);
+    DEBUG_ECHOLNPGM("changing from: ", previous_extruder);
+    DEBUG_ECHOLNPGM("changing to: ", new_tool);
 
     if (dual_x_carriage_mode == DXC_AUTO_PARK_MODE                  // If Auto-Park mode is enabled
         && IsRunning() && !no_move                                  // ...and movement is permitted
         && (delayed_move_time || current_position.x != xhome)       // ...and delayed_move_time is set OR not "already parked"...
     ) {
-      DEBUG_ECHOLNPGM("MoveX to ", xhome);
-      current_position.x = xhome;
-      line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // Park the current head
-      planner.synchronize();
+		home_and_clean();
     }
+
+	// release any pending preheat for the next extruder
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	if (new_tool != active_extruder)
+	{
+      // determine if we need to cool the current hotend
+      bool cooling_old_hotend = false;
+      celsius_t current_target = thermalManager.degTargetHotend(active_extruder);
+      if (current_target > INACTIVE_EXTRUDER_MAXTEMP)
+      {
+        // cache this temp so we may return to it later if the tool switches back
+        DEBUG_ECHOLNPGM("Caching current temp: E", active_extruder, " temp:", current_target);
+        thermalManager.cache_target_temp(active_extruder, current_target);
+        
+        // apply the cooldown temp
+        DEBUG_ECHOLNPGM("Cooling E", active_extruder, " from:", current_target, " to:", INACTIVE_EXTRUDER_MAXTEMP);
+        thermalManager.setTargetHotend(INACTIVE_EXTRUDER_MAXTEMP, active_extruder);
+        thermalManager.set_heating_message(active_extruder);
+
+        cooling_old_hotend = true;
+      }
+
+      // apply any cached temperature requests to the new hotend
+      bool heating_new_hotend = false;
+      celsius_t cached_temp = thermalManager.read_and_clear_cached_target_temp(new_tool);
+		  if (cached_temp > 0)
+      {
+        // begin preheating new_tool to the cached temperature request
+        thermalManager.setTargetHotend(cached_temp, new_tool);
+        TERN_(AUTOTEMP, planner.autotemp_update());
+        thermalManager.set_heating_message(new_tool);
+        heating_new_hotend = true;
+      }
+
+      // when reusing the same carriage, stop and wait for the temparature changes
+      if (idex_get_carriage(active_extruder) == idex_get_carriage(new_tool))
+      {
+        if (heating_new_hotend)
+        {
+            DEBUG_ECHOLNPGM("Wait for preheat: E", new_tool);
+            thermalManager.wait_for_hotend(new_tool, false);
+        }        
+        
+        if (cooling_old_hotend)
+        {
+            DEBUG_ECHOLNPGM("Wait for cooldown: E", active_extruder);
+            thermalManager.wait_for_hotend(active_extruder, false);
+        }
+      }  
+	}
+  #endif	
+
+	inactive_extruder_x = current_position.x;
 
     // Activate the new extruder ahead of calling set_axis_is_at_home!
     active_extruder = new_tool;
+    DEBUG_ECHOLNPGM("active_extruder changed to E", active_extruder);
+		TERN_(AUTOTEMP, planner.autotemp_update());
 
     // This function resets the max/min values - the current position may be overwritten below.
     set_axis_is_at_home(X_AXIS);
@@ -874,9 +985,9 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
     switch (dual_x_carriage_mode) {
       case DXC_FULL_CONTROL_MODE:
         // New current position is the position of the activated extruder
-        current_position.x = inactive_extruder_x;
+ //       current_position.x = inactive_extruder_x;
         // Save the inactive extruder's position (from the old current_position)
-        inactive_extruder_x = destination.x;
+  //      inactive_extruder_x = destination.x;
         DEBUG_ECHOLNPGM("DXC Full Control curr.x=", current_position.x, " dest.x=", destination.x);
         break;
       case DXC_AUTO_PARK_MODE:
@@ -891,7 +1002,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 
     DEBUG_ECHOLNPGM("Active extruder parked: ", active_extruder_parked ? "yes" : "no");
     DEBUG_POS("New extruder (parked)", current_position);
-  }
+}
 
 #endif // DUAL_X_CARRIAGE
 
@@ -1134,14 +1245,14 @@ void tool_change(const uint8_t new_tool, bool no_move/*=false*/) {
     planner.synchronize();
 
     #if ENABLED(DUAL_X_CARRIAGE)  // Only T0 allowed if the Printer is in DXC_DUPLICATION_MODE or DXC_MIRRORED_MODE
-      if (new_tool != 0 && idex_is_duplicating())
+      if (idex_get_carriage(new_tool)!=0 && idex_is_duplicating())
          return invalid_extruder_error(new_tool);
     #endif
 
     if (new_tool >= EXTRUDERS)
       return invalid_extruder_error(new_tool);
 
-    if (!no_move && homing_needed()) {
+    if (!no_move && !axis_was_homed(X_AXIS)) {
       no_move = true;
       DEBUG_ECHOLNPGM("No move (not homed)");
     }
@@ -1378,6 +1489,11 @@ void tool_change(const uint8_t new_tool, bool no_move/*=false*/) {
       #endif
 
       TERN_(SWITCHING_NOZZLE_TWO_SERVOS, lower_nozzle(new_tool));
+
+		// clean the new tool before proceeding
+	#if ENABLED(DUAL_X_CARRIAGE)
+		home_and_clean();
+	#endif
 
     } // (new_tool != old_tool)
 

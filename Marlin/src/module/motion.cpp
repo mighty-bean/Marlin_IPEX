@@ -66,7 +66,7 @@
   #include "../feature/babystep.h"
 #endif
 
-#define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
+#define DEBUG_OUT 1//ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../core/debug_out.h"
 
 // Relative Mode. Enable with G91, disable with G90.
@@ -120,7 +120,11 @@ xyze_pos_t destination; // {0}
     );
     // Transpose from [XYZ][HOTENDS] to [HOTENDS][XYZ]
     HOTEND_LOOP() LOOP_ABC(a) hotend_offset[e][a] = tmp[a][e];
-    TERN_(DUAL_X_CARRIAGE, hotend_offset[1].x = _MAX(X2_HOME_POS, X2_MAX_POS));
+
+	// report the hotend offsets
+    LOOP_S_L_N(e, 1, HOTENDS)
+        SERIAL_ECHOLNPGM_P(PSTR("T"), e, PSTR(" Hotend Offset X"), hotend_offset[e].x, SP_Y_STR, hotend_offset[e].y, SP_Z_STR, hotend_offset[e].z);
+
   }
 #endif
 
@@ -830,10 +834,38 @@ void restore_feedrate_and_scaling() {
 
       if (axis == X_AXIS) {
 
-        // In Dual X mode hotend_offset[X] is T1's home position
-        const float dual_max_x = _MAX(hotend_offset[1].x, X2_MAX_POS);
+		float dual_min_x = X1_MIN_POS;
+		float dual_max_x = X1_MAX_POS;
+		if (idex_get_carriage(new_tool_index) == 0)
+		{
+			int firstCarriageExtruder = 0;
+			float deltaFromLeft = hotend_offset[new_tool_index].x - hotend_offset[firstCarriageExtruder].x;
+			dual_min_x = X1_MIN_POS + deltaFromLeft;
+			dual_max_x = X1_MAX_POS + deltaFromLeft;
+		}
+		else
+		{
+			int lastCarriageExtruder = EXTRUDERS-1;
+			float deltaFromRight = hotend_offset[new_tool_index].x - hotend_offset[lastCarriageExtruder].x;
+			dual_min_x = X2_MIN_POS - deltaFromRight;
+			dual_max_x = X2_MAX_POS - deltaFromRight;
+		}
 
-        if (new_tool_index != 0) {
+		if (idex_is_duplicating()) {
+          // In Duplication Mode, T0 can move as far left as X1_MIN_POS
+          // but not so far to the right that T1 would move past the end
+          soft_endstop.min.x = dual_min_x;
+          soft_endstop.max.x = dual_max_x - duplicate_extruder_x_offset;
+        }
+		else
+		{
+          soft_endstop.min.x = dual_min_x;
+          soft_endstop.max.x = dual_max_x;
+		}		
+        // In Dual X mode hotend_offset[X] is T1's home position
+/*      const float dual_max_x = _MAX(hotend_offset[EXTRUDERS-1].x, X2_MAX_POS);
+
+        if (idex_get_carriage(new_tool_index) != 0) {
           // T1 can move from X2_MIN_POS to X2_MAX_POS or X2 home position (whichever is larger)
           soft_endstop.min.x = X2_MIN_POS;
           soft_endstop.max.x = dual_max_x;
@@ -849,6 +881,7 @@ void restore_feedrate_and_scaling() {
           soft_endstop.min.x = X1_MIN_POS;
           soft_endstop.max.x = X1_MAX_POS;
         }
+*/
 
       }
 
@@ -893,7 +926,7 @@ void restore_feedrate_and_scaling() {
 
     #endif
 
-    if (DEBUGGING(LEVELING))
+    //if (DEBUGGING(LEVELING))
       SERIAL_ECHOLNPGM("Axis ", AS_CHAR(AXIS_CHAR(axis)), " min:", soft_endstop.min[axis], " max:", soft_endstop.max[axis]);
   }
 
@@ -1274,15 +1307,12 @@ FORCE_INLINE void segment_idle(millis_t &next_idle_ms) {
   bool idex_mirrored_mode                = false;                         // Used in mode 3
 
   float x_home_pos(const uint8_t extruder) {
-    if (extruder == 0) return X_HOME_POS;
 
-    /**
-     * In dual carriage mode the extruder offset provides an override of the
-     * second X-carriage position when homed - otherwise X2_HOME_POS is used.
-     * This allows soft recalibration of the second extruder home position
-     * (with M218 T1 Xn) without firmware reflash.
-     */
-    return hotend_offset[1].x > 0 ? hotend_offset[1].x : X2_HOME_POS;
+    if (idex_get_carriage(extruder) == 0) 
+    {
+      return X1_MIN_POS + hotend_offset[extruder].x;
+    }
+    return hotend_offset[extruder].x;
   }
 
   void idex_set_mirrored_mode(const bool mirr) {
@@ -1300,6 +1330,22 @@ FORCE_INLINE void segment_idle(millis_t &next_idle_ms) {
     delayed_move_time = 0;
     active_extruder_parked = park;
     if (park) raised_parked_position = current_position;  // Remember current raised toolhead position for use by unpark
+  }
+
+  uint8_t idex_get_carriage(const uint8_t extruder_index) {
+      return extruder_index < EXTRUDERS_PER_CARRIAGE ? 0 : 1;
+  }
+
+  uint8_t idex_get_duplication_extruder(const uint8_t extruder_index) {
+    if (dual_x_carriage_mode == DXC_DUPLICATION_MODE)
+    {
+      return (extruder_index + EXTRUDERS_PER_CARRIAGE) % EXTRUDERS;
+    }
+    else if (dual_x_carriage_mode == DXC_MIRRORED_MODE)
+    {
+      return EXTRUDERS - extruder_index - 1;
+    }  
+    return extruder_index;
   }
 
   /**
@@ -1347,7 +1393,7 @@ FORCE_INLINE void segment_idle(millis_t &next_idle_ms) {
 
         case DXC_MIRRORED_MODE:
         case DXC_DUPLICATION_MODE:
-          if (active_extruder == 0) {
+          if (idex_get_carriage(active_extruder) == 0) {
             set_duplication_enabled(false); // Clear stale duplication state
             // Restore planner to parked head (T1) X position
             float x0_pos = current_position.x;
@@ -2320,7 +2366,7 @@ void set_axis_is_at_home(const AxisEnum axis) {
   set_axis_homed(axis);
 
   #if ENABLED(DUAL_X_CARRIAGE)
-    if (axis == X_AXIS && (active_extruder == 1 || dual_x_carriage_mode == DXC_DUPLICATION_MODE)) {
+    if (axis == X_AXIS) { // && (idex_get_carriage(active_extruder) == 1 || dual_x_carriage_mode == DXC_DUPLICATION_MODE)) {
       current_position.x = x_home_pos(active_extruder);
       return;
     }

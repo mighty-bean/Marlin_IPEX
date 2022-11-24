@@ -127,6 +127,10 @@
   inline uint8_t check_tool_sensor_stats(const uint8_t, const bool=false, const bool=false) { return 0; }
 #endif
 
+#if ENABLED(DUAL_X_CARRIAGE)
+void home_and_clean();
+#endif
+
 /**
  * Perform a tool-change, which may result in moving the
  * previous tool out of the way and the new tool into place.

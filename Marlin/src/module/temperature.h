@@ -363,7 +363,7 @@ struct HeaterWatch {
   inline void restart(const celsius_t curr, const celsius_t tgt) {
     if (tgt) {
       const celsius_t newtarget = curr + INCREASE;
-      if (newtarget < tgt - HYSTERESIS - 1) {
+      if (newtarget < tgt - HYSTERESIS - INCREASE - 1) {
         target = newtarget;
         next_ms = millis() + SEC_TO_MS(PERIOD);
         return;
@@ -578,6 +578,16 @@ class Temperature {
     #if HAS_FAN_LOGIC
       static constexpr millis_t fan_update_interval_ms = TERN(HAS_PWMFANCHECK, 5000, TERN(HAS_FANCHECK, 1000, 2500));
     #endif
+
+	#if INACTIVE_EXTRUDER_MAXTEMP
+    static celsius_t hotend_cached_temp[HOTENDS];
+	  static void cache_target_temp(const int8_t heater_id, celsius_t temp);
+	  static celsius_t get_cached_target_temp(const int8_t heater_id);
+    static void clear_cached_target_temp(const int8_t heater_id);
+	  static celsius_t read_and_clear_cached_target_temp(const int8_t heater_id);  
+	  static void log_cached_target_temps();
+    static void clear_cached_target_temps();
+	#endif
 
   private:
 
@@ -839,6 +849,14 @@ class Temperature {
         #endif
         TERN_(AUTO_POWER_CONTROL, if (celsius) powerManager.power_on());
         temp_hotend[ee].target = _MIN(celsius, hotend_max_target(ee));
+
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+        if (celsius <= 0)
+        {
+          // turning off the hotend also clears it's cache
+          cache_target_temp(ee, 0);
+        }
+#endif
         start_watching_hotend(ee);
       }
 
