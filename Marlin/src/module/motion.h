@@ -111,6 +111,9 @@ extern int16_t feedrate_percentage;
 #else
   constexpr uint8_t active_extruder = 0;
 #endif
+  uint8_t active_carriage(uint8_t extruder_index);
+  uint8_t opposite_extruder(uint8_t extruder_index);
+  uint8_t second_carriage_first_extruder();
 
 #if ENABLED(LCD_SHOW_E_TOTAL)
   extern float e_move_accumulator;
@@ -592,7 +595,7 @@ void home_if_needed(const bool keeplev=false);
   inline bool position_is_reachable(const_float_t rx, const_float_t ry) {
     if (!COORDINATE_OKAY(ry, Y_MIN_POS - fslop, Y_MAX_POS + fslop)) return false;
     #if ENABLED(DUAL_X_CARRIAGE)
-      if (active_extruder)
+      if (active_carriage(active_extruder))
         return COORDINATE_OKAY(rx, X2_MIN_POS - fslop, X2_MAX_POS + fslop);
       else
         return COORDINATE_OKAY(rx, X1_MIN_POS - fslop, X1_MAX_POS + fslop);
@@ -636,7 +639,7 @@ void home_if_needed(const bool keeplev=false);
 
   float x_home_pos(const uint8_t extruder);
 
-  #define TOOL_X_HOME_DIR(T) ((T) ? X2_HOME_DIR : X_HOME_DIR)
+  #define TOOL_X_HOME_DIR(T) (active_carriage(T) ? X2_HOME_DIR : X_HOME_DIR)
 
   void set_duplication_enabled(const bool dupe, const int8_t tool_index=-1);
   void idex_set_mirrored_mode(const bool mirr);

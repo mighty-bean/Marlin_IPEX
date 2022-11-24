@@ -710,8 +710,8 @@ void Endstops::update() {
   #endif
 
   // With Dual X, endstops are only checked in the homing direction for the active extruder
-  #define X_MIN_TEST() TERN1(DUAL_X_CARRIAGE, TERN0(X_HOME_TO_MIN, stepper.last_moved_extruder == 0) || TERN0(X2_HOME_TO_MIN, stepper.last_moved_extruder != 0))
-  #define X_MAX_TEST() TERN1(DUAL_X_CARRIAGE, TERN0(X_HOME_TO_MAX, stepper.last_moved_extruder == 0) || TERN0(X2_HOME_TO_MAX, stepper.last_moved_extruder != 0))
+  #define X_MIN_TEST() TERN1(DUAL_X_CARRIAGE, TERN0(X_HOME_TO_MIN, active_carriage(stepper.last_moved_extruder) == 0) || TERN0(X2_HOME_TO_MIN, active_carriage(stepper.last_moved_extruder) != 0))
+  #define X_MAX_TEST() TERN1(DUAL_X_CARRIAGE, TERN0(X_HOME_TO_MAX, active_carriage(stepper.last_moved_extruder) == 0) || TERN0(X2_HOME_TO_MAX, active_carriage(stepper.last_moved_extruder) != 0))
 
   // Use HEAD for core axes, AXIS for others
   #if ANY(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY, MARKFORGED_YX)

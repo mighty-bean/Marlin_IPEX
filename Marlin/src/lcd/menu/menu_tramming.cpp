@@ -40,7 +40,7 @@
   #include "../../feature/bltouch.h"
 #endif
 
-//#define DEBUG_OUT 1
+#define DEBUG_OUT 1
 #include "../../core/debug_out.h"
 
 static float z_measured[G35_PROBE_COUNT];

@@ -314,7 +314,7 @@ void menu_move() {
 
   #elif ENABLED(DUAL_X_CARRIAGE)
 
-    if (active_extruder)
+    if (active_carriage(active_extruder))
       GCODES_ITEM_N(0, MSG_SELECT_E, PSTR("T0"));
     else
       GCODES_ITEM_N(1, MSG_SELECT_E, PSTR("T1"));

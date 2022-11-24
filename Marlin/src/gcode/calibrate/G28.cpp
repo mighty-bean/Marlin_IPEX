@@ -418,8 +418,8 @@ void GcodeSuite::G28() {
 
       #if ENABLED(DUAL_X_CARRIAGE)
 
-        // Always home the 2nd (right) extruder first
-        active_extruder = 1;
+        // Always home the 2nd (right) carriage first
+        active_extruder = second_carriage_first_extruder();
         homeaxis(X_AXIS);
 
         // Remember this extruder's position for later tool change
@@ -502,8 +502,8 @@ void GcodeSuite::G28() {
 
       TERN_(IMPROVE_HOMING_RELIABILITY, saved_motion_state = begin_slow_homing());
 
-      // Always home the 2nd (right) extruder first
-      active_extruder = 1;
+      // Always home the 2nd (right) carriage first
+      active_extruder = second_carriage_first_extruder();
       homeaxis(X_AXIS);
 
       // Remember this extruder's position for later tool change

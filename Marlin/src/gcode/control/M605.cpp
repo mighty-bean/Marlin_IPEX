@@ -24,7 +24,7 @@
 
 #if HAS_DUPLICATION_MODE
 
-//#define DEBUG_DXC_MODE
+#define DEBUG_DXC_MODE
 
 #include "../gcode.h"
 #include "../../module/motion.h"
@@ -81,7 +81,7 @@
           if (parser.seenval('X')) duplicate_extruder_x_offset = _MAX(parser.value_linear_units(), (X2_MIN_POS) - (X1_MIN_POS));
           if (parser.seenval('R')) duplicate_extruder_temp_offset = parser.value_celsius_diff();
           // Always switch back to tool 0
-          if (active_extruder != 0) tool_change(0);
+          if (active_carriage(active_extruder) != 0) tool_change(opposite_extruder(active_extruder));
           break;
 
         case DXC_MIRRORED_MODE: {

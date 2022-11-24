@@ -4529,3 +4529,23 @@ void Temperature::isr() {
   #endif // HAS_COOLER
 
 #endif // HAS_TEMP_SENSOR
+
+#ifdef NO_PREHEAT_CARRIAGE_MATES
+celsius_t Temperature::hotend_cached_preheat[HOTENDS] = {0};
+
+	//static const celsius_t hotend_cached_preheat[HOTENDS];
+void Temperature::cache_preheat(const int8_t heater_id, celsius_t temp)
+{
+	hotend_cached_preheat[heater_id] = temp;
+}
+
+void Temperature::apply_cached_preheat(const int8_t heater_id)
+{
+	if (hotend_cached_preheat[heater_id] > thermalManager.degHotend(heater_id))
+	{ 
+		thermalManager.setTargetHotend(hotend_cached_preheat[heater_id], heater_id);
+		hotend_cached_preheat[heater_id] = 0;
+	}
+}
+
+#endif

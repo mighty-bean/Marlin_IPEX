@@ -109,11 +109,28 @@ void GcodeSuite::M104_M109(const bool isM109) {
       thermalManager.singlenozzle_temp[target_extruder] = temp;
       if (target_extruder != active_extruder) return;
     #endif
+    
+	#if ENABLED(DUAL_X_CARRIAGE) && ENABLED(NO_PREHEAT_CARRIAGE_MATES)
+		// don't preheat other nozzles on the active carriage.
+		if (active_extruder != target_extruder
+			&& temp > thermalManager.degHotend(target_extruder)
+			&& !isM109)
+		{
+			// don't do the preheat, but cache it for tool_change.cpp
+			thermalManager.cache_preheat(target_extruder, temp);
+			return;
+		}
+		else
+		{
+			thermalManager.cache_preheat(target_extruder, 0);
+		}
+	#endif
+
     thermalManager.setTargetHotend(temp, target_extruder);
 
     #if ENABLED(DUAL_X_CARRIAGE)
-      if (idex_is_duplicating() && target_extruder == 0)
-        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, 1);
+      if (idex_is_duplicating() && active_carriage(target_extruder) == 0)
+        thermalManager.setTargetHotend(temp ? temp + duplicate_extruder_temp_offset : 0, opposite_extruder(target_extruder));
     #endif
 
     #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
@@ -132,7 +149,15 @@ void GcodeSuite::M104_M109(const bool isM109) {
   TERN_(AUTOTEMP, planner.autotemp_M104_M109());
 
   if (isM109 && got_temp)
-    (void)thermalManager.wait_for_hotend(target_extruder, no_wait_for_cooling);
+  {
+	  (void)thermalManager.wait_for_hotend(target_extruder, no_wait_for_cooling);
+    #if ENABLED(DUAL_X_CARRIAGE)
+      if (idex_is_duplicating())
+    	{
+			thermalManager.wait_for_hotend(opposite_extruder(target_extruder), no_wait_for_cooling);
+		}
+    #endif
+  }
 }
 
 #endif // EXTRUDERS

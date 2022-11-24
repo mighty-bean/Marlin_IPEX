@@ -509,6 +509,12 @@ class Temperature {
       static constexpr millis_t fan_update_interval_ms = TERN(HAS_PWMFANCHECK, 5000, TERN(HAS_FANCHECK, 1000, 2500));
     #endif
 
+	#ifdef NO_PREHEAT_CARRIAGE_MATES
+      static celsius_t hotend_cached_preheat[HOTENDS];
+	  static void cache_preheat(const int8_t heater_id, celsius_t temp);
+	  static void apply_cached_preheat(const int8_t heater_id);
+	#endif
+
   private:
 
     #if ENABLED(WATCH_HOTENDS)
@@ -769,6 +775,8 @@ class Temperature {
         #endif
         TERN_(AUTO_POWER_CONTROL, if (celsius) powerManager.power_on());
         temp_hotend[ee].target = _MIN(celsius, hotend_max_target(ee));
+
+
         start_watching_hotend(ee);
       }
 

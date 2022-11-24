@@ -21,6 +21,20 @@
  */
 #pragma once
 
+  	// OCTOPUS FIXUP
+	#if MOTHERBOARD == BOARD_BTT_OCTOPUS_V1_1
+		#ifndef Z2_STEP_PIN
+			#error Z2_STEP_PIN Not yet valid
+		#endif
+
+		#define X2_STEP_PIN   Z2_STEP_PIN
+    	#define X2_DIR_PIN    Z2_DIR_PIN
+    	#define X2_ENABLE_PIN Z2_ENABLE_PIN
+  		#define X2_SERIAL_TX_PIN Z2_SERIAL_TX_PIN
+  		#define X2_SERIAL_RX_PIN Z2_SERIAL_RX_PIN
+   	#endif
+	// OCTOPUS FIXUP (end)
+
 //
 // File: pins/pins_postprocess.h
 // Post-process pins according to configured settings
@@ -682,10 +696,33 @@
     #error "No E1 stepper available for E_DUAL_STEPPER_DRIVERS!"
   #endif
   #define X2_E_INDEX INCREMENT(E_STEPPERS)
+  #error "E_DUAL_STEPPER_DRIVERS increment"
 #else
   #define X2_E_INDEX E_STEPPERS
 #endif
 
+/*	// OUTPUT
+	#if X2_E_INDEX==0
+	  #error X2_E_INDEX = 0
+	#elif X2_E_INDEX==1
+	  #error X2_E_INDEX = 1
+	#elif X2_E_INDEX==2
+	  #error X2_E_INDEX = 2
+	#elif X2_E_INDEX==3
+	  #error X2_E_INDEX = 3
+	#elif X2_E_INDEX==4
+	  #error X2_E_INDEX = 4
+	#elif X2_E_INDEX==5
+	  #error X2_E_INDEX = 5
+	#elif X2_E_INDEX==6
+	  #error X2_E_INDEX = 6
+	#elif X2_E_INDEX==7
+	  #error X2_E_INDEX = 7
+	#elif X2_E_INDEX==8
+	  #error X2_E_INDEX = 8
+	#endif
+	// OUTPUT
+*/
 #if HAS_X2_STEPPER && !defined(X2_DIAG_PIN) && !defined(X2_STEP_PIN) && !PIN_EXISTS(X2_CS_PIN)
   #define Y2_E_INDEX INCREMENT(X2_E_INDEX)
 #else
@@ -698,7 +735,17 @@
     #define X2_STEP_PIN   _EPIN(X2_E_INDEX, STEP)
     #define X2_DIR_PIN    _EPIN(X2_E_INDEX, DIR)
     #define X2_ENABLE_PIN _EPIN(X2_E_INDEX, ENABLE)
+
     #if X2_E_INDEX >= MAX_E_STEPPERS || !PIN_EXISTS(X2_STEP)
+
+		#if X2_E_INDEX >= MAX_E_STEPPERS
+		 #error X2_E_INDEX >= MAX_E_STEPPERS
+		#endif
+
+		#if !PIN_EXISTS(X2_STEP)
+		 #error !PIN_EXISTS(X2_STEP)
+		#endif
+
       #error "No E stepper plug left for X2!"
     #else
       #define AUTO_ASSIGNED_X2_STEPPER 1
