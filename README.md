@@ -2,6 +2,8 @@
 
 *This is a work in progress. Not fully tested.*
 
+Details available on YouTube: https://youtu.be/aYOCjpKOlpE
+
 Marlin contains support for IDEX printers (*Independant Dual Extruders*) where two independant carriages can move on the x-axis, each containing one extruder. This allows for two separate filaments to be used within the same print, or printing two models simultaneously in mirrored mode. 
 
 A unique printer configuration is added in this customized version of Marlin, which we call **IPEX** for *Independant Paired Extruder*s. As with IDEX printers, there are two independent carriages on the x-axis, but we place a pair of extruders on each. This allows for a total of four independent filaments printed withing the same session, or two filaments on each side of mirrored mode. 
