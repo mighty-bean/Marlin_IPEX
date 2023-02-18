@@ -840,13 +840,15 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	remember_feedrate_scaling_off();
 	endstops.enable(true); // Enable endstops for next homing move
 	homeaxis(X_AXIS);
+	homeaxis(Y_AXIS);
 	endstops.not_homing();
 	sync_plan_position();
   	// Clear endstop state for polled stallGuard endstops
   	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
 	restore_feedrate_and_scaling();
 	set_axis_is_at_home(X_AXIS);
-
+	set_axis_is_at_home(Y_AXIS);
+		
 	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
 #if TOOL_CHANGE_CLEANING_SWIPES > 0
     const float xhome = x_home_pos(active_extruder);
@@ -885,6 +887,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
   	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
 	restore_feedrate_and_scaling();
 	set_axis_is_at_home(X_AXIS);
+
 #endif
 
  }
@@ -924,7 +927,6 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	if (new_tool != active_extruder)
 	{
       // determine if we need to cool the current hotend
-      bool cooling_old_hotend = false;
       celsius_t current_target = thermalManager.degTargetHotend(active_extruder);
       if (current_target > INACTIVE_EXTRUDER_MAXTEMP)
       {
@@ -936,8 +938,6 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
         DEBUG_ECHOLNPGM("Cooling E", active_extruder, " from:", current_target, " to:", INACTIVE_EXTRUDER_MAXTEMP);
         thermalManager.setTargetHotend(INACTIVE_EXTRUDER_MAXTEMP, active_extruder);
         thermalManager.set_heating_message(active_extruder);
-
-        cooling_old_hotend = true;
       }
 
       // apply any cached temperature requests to the new hotend
@@ -952,21 +952,32 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
         heating_new_hotend = true;
       }
 
-      // when reusing the same carriage, stop and wait for the temparature changes
-      if (idex_get_carriage(active_extruder) == idex_get_carriage(new_tool))
-      {
-        if (heating_new_hotend)
-        {
-            DEBUG_ECHOLNPGM("Wait for preheat: E", new_tool);
-            thermalManager.wait_for_hotend(new_tool, false);
-        }        
-        
-        if (cooling_old_hotend)
-        {
-            DEBUG_ECHOLNPGM("Wait for cooldown: E", active_extruder);
-            thermalManager.wait_for_hotend(active_extruder, false);
-        }
-      }  
+      // cool any additional tools on the new carriage
+	  uint8_t new_carriage = idex_get_carriage(new_tool);
+	  HOTEND_LOOP() {
+		if ((idex_get_carriage(e) == new_carriage) && (e != active_extruder) && (e != new_tool))
+		{
+			celsius_t e_target = thermalManager.degTargetHotend(e);
+			if (e_target > INACTIVE_EXTRUDER_MAXTEMP)
+			{
+				thermalManager.setTargetHotend(INACTIVE_EXTRUDER_MAXTEMP, e);
+			
+				// cache the old temp?
+				if (e_target > thermalManager.get_cached_target_temp(e))
+				{
+					thermalManager.cache_target_temp(e, e_target);
+				}
+			}
+		}
+	  }
+
+		// wait for the new toolhead to warm up if needed
+  		if (heating_new_hotend)
+		{
+			DEBUG_ECHOLNPGM("Wait for preheat: E", new_tool);
+			thermalManager.wait_for_hotend(new_tool, true);
+		}        
+
 	}
   #endif	
 

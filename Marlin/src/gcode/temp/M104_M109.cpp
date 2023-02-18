@@ -121,7 +121,14 @@ void GcodeSuite::M104_M109(const bool isM109) {
 			// limit requested temp to INACTIVE_EXTRUDER_MAXTEMP but cache the desired temp to be applied during tool_change.cpp
 			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", temp, " replacement:", INACTIVE_EXTRUDER_MAXTEMP);
 			thermalManager.cache_target_temp(target_extruder, temp);
-			temp = INACTIVE_EXTRUDER_MAXTEMP;
+			if (idex_get_carriage(active_extruder) == idex_get_carriage(target_extruder))
+			{
+				temp = INACTIVE_EXTRUDER_MAXTEMP;
+			}
+			else
+			{
+				temp = (temp + INACTIVE_EXTRUDER_MAXTEMP) / 2;
+			}
 		}
 		else
 		{
