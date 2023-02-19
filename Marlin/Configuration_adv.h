@@ -806,6 +806,9 @@
   // set the number of cleaning swipes to perform over brushes near the XAXIS home position
   #define TOOL_CHANGE_CLEANING_SWIPES 0 // 0 for none
 
+  // set when tool changes should re-home the Y axis as well as X
+   #define TOOL_CHANGE_HOME_Y
+
   // define the two offsets on the XAXIS from the home position to move between when cleaning using a mounted brush
   #define TOOL_CHANGE_CLEANING_NEAR_OFFSET 5 // how near from the XAXIS home position to move to when cleaning
   #define TOOL_CHANGE_CLEANING_FAR_OFFSET 80 // how far from the XAXIS home position to move to when cleaning

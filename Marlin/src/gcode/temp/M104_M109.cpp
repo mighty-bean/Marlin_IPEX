@@ -116,18 +116,23 @@ void GcodeSuite::M104_M109(const bool isM109) {
 	#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
 		// don't preheat other nozzles above INACTIVE_EXTRUDER_MAXTEMP
 		if (target_extruder != active_extruder
-			&& temp > INACTIVE_EXTRUDER_MAXTEMP)
+			&& temp > INACTIVE_EXTRUDER_MAXTEMP
+      && printJobOngoing())
 		{
 			// limit requested temp to INACTIVE_EXTRUDER_MAXTEMP but cache the desired temp to be applied during tool_change.cpp
 			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", temp, " replacement:", INACTIVE_EXTRUDER_MAXTEMP);
 			thermalManager.cache_target_temp(target_extruder, temp);
 			if (idex_get_carriage(active_extruder) == idex_get_carriage(target_extruder))
 			{
-				temp = INACTIVE_EXTRUDER_MAXTEMP;
+        // extruder attempting to heat up is on the same carriage as the current one, which might cause it to ooze onto the print.
+        // We cap it's max temp to INACTIVE_EXTRUDER_MAXTEMP until it becomes the active extruder
+				temp = min(temp, (celsius_t)INACTIVE_EXTRUDER_MAXTEMP);
 			}
 			else
 			{
-				temp = (temp + INACTIVE_EXTRUDER_MAXTEMP) / 2;
+        // extruder attempting to heat up is NOT on the same carriage, but we don't want it to preheat too early (silly Cura)
+        // We cap it's max temp to midway between INACTIVE_EXTRUDER_MAXTEMP and the target temp until it becomes the active extruder
+				temp = min(temp, (celsius_t)((temp + INACTIVE_EXTRUDER_MAXTEMP) / 2));
 			}
 		}
 		else

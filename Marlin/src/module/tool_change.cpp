@@ -840,15 +840,22 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	remember_feedrate_scaling_off();
 	endstops.enable(true); // Enable endstops for next homing move
 	homeaxis(X_AXIS);
-	homeaxis(Y_AXIS);
-	endstops.not_homing();
+
+	#if ENABLED(TOOL_CHANGE_HOME_Y)
+    homeaxis(Y_AXIS);
+	#endif
+  
+  endstops.not_homing();
 	sync_plan_position();
-  	// Clear endstop state for polled stallGuard endstops
-  	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
+  // Clear endstop state for polled stallGuard endstops
+  TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
 	restore_feedrate_and_scaling();
 	set_axis_is_at_home(X_AXIS);
-	set_axis_is_at_home(Y_AXIS);
-		
+	
+  #if ENABLED(TOOL_CHANGE_HOME_Y)
+    set_axis_is_at_home(Y_AXIS);
+	#endif
+
 	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
 #if TOOL_CHANGE_CLEANING_SWIPES > 0
     const float xhome = x_home_pos(active_extruder);
