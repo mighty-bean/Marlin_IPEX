@@ -834,27 +834,47 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 
 #if ENABLED(DUAL_X_CARRIAGE)
 
-  void home_and_clean()
+  void home_x()
   {
 	// Force homing on every tool change
 	remember_feedrate_scaling_off();
 	endstops.enable(true); // Enable endstops for next homing move
+	
 	homeaxis(X_AXIS);
 
-	#if ENABLED(TOOL_CHANGE_HOME_Y)
-    homeaxis(Y_AXIS);
-	#endif
-  
-  endstops.not_homing();
+	endstops.not_homing();
 	sync_plan_position();
-  // Clear endstop state for polled stallGuard endstops
-  TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
+	// Clear endstop state for polled stallGuard endstops
+	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
 	restore_feedrate_and_scaling();
 	set_axis_is_at_home(X_AXIS);
-	
-  #if ENABLED(TOOL_CHANGE_HOME_Y)
-    set_axis_is_at_home(Y_AXIS);
-	#endif
+  }
+
+  void home_y_and_present()
+  {
+	// Force homing on every tool change
+	remember_feedrate_scaling_off();
+	endstops.enable(true); // Enable endstops for next homing move
+
+	homeaxis(Y_AXIS);
+
+	endstops.not_homing();
+	sync_plan_position();
+	// Clear endstop state for polled stallGuard endstops
+	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
+	restore_feedrate_and_scaling();
+
+	set_axis_is_at_home(Y_AXIS);
+
+	// bring the print forward while we wait (in case we are monitoring with a camera
+	current_position.y = Y_CENTER + (Y_CENTER/2);
+	line_to_current_position(homing_feedrate(Y_AXIS)); 
+	planner.synchronize();
+  }
+
+  void home_and_clean()
+  {
+	home_x();
 
 	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
 #if TOOL_CHANGE_CLEANING_SWIPES > 0
@@ -885,15 +905,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	}
 
 	// re-home after cleaning
-	remember_feedrate_scaling_off();
-	endstops.enable(true); // Enable endstops for next homing move
-	homeaxis(X_AXIS);
-	endstops.not_homing();
-	sync_plan_position();
-  	// Clear endstop state for polled stallGuard endstops
-  	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
-	restore_feedrate_and_scaling();
-	set_axis_is_at_home(X_AXIS);
+	home_x();
 
 #endif
 
@@ -935,15 +947,15 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	{
       // determine if we need to cool the current hotend
       celsius_t current_target = thermalManager.degTargetHotend(active_extruder);
-      if (current_target > INACTIVE_EXTRUDER_MAXTEMP)
+      if (current_target > INACTIVE_EXTRUDER_BASETEMP)
       {
         // cache this temp so we may return to it later if the tool switches back
         DEBUG_ECHOLNPGM("Caching current temp: E", active_extruder, " temp:", current_target);
         thermalManager.cache_target_temp(active_extruder, current_target);
         
         // apply the cooldown temp
-        DEBUG_ECHOLNPGM("Cooling E", active_extruder, " from:", current_target, " to:", INACTIVE_EXTRUDER_MAXTEMP);
-        thermalManager.setTargetHotend(INACTIVE_EXTRUDER_MAXTEMP, active_extruder);
+        DEBUG_ECHOLNPGM("Cooling E", active_extruder, " from:", current_target, " to:", INACTIVE_EXTRUDER_BASETEMP);
+        thermalManager.setTargetHotend(INACTIVE_EXTRUDER_BASETEMP, active_extruder);
         thermalManager.set_heating_message(active_extruder);
       }
 
@@ -965,9 +977,9 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 		if ((idex_get_carriage(e) == new_carriage) && (e != active_extruder) && (e != new_tool))
 		{
 			celsius_t e_target = thermalManager.degTargetHotend(e);
-			if (e_target > INACTIVE_EXTRUDER_MAXTEMP)
+			if (e_target > INACTIVE_EXTRUDER_BASETEMP)
 			{
-				thermalManager.setTargetHotend(INACTIVE_EXTRUDER_MAXTEMP, e);
+				thermalManager.setTargetHotend(INACTIVE_EXTRUDER_BASETEMP, e);
 			
 				// cache the old temp?
 				if (e_target > thermalManager.get_cached_target_temp(e))
@@ -978,6 +990,11 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 		}
 	  }
 
+		// re-home to delay while we wait for temp changes (with Y allowed, too)
+	#if ENABLED(TOOL_CHANGE_HOME_Y)
+		home_y_and_present();
+	#endif
+
 		// wait for the new toolhead to warm up if needed
   		if (heating_new_hotend)
 		{
@@ -986,7 +1003,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 		}        
 
 	}
-  #endif	
+#endif	
 
 	inactive_extruder_x = current_position.x;
 

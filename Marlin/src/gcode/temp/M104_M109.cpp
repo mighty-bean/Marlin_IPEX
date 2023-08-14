@@ -114,26 +114,38 @@ void GcodeSuite::M104_M109(const bool isM109) {
     #endif
     
 	#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
-		// don't preheat other nozzles above INACTIVE_EXTRUDER_MAXTEMP
+		celsius_t RequestedTemp = temp;
+		celsius_t ReplacementTemp = temp;
+		celsius_t max_temp = thermalManager.get_max_requested_temp(target_extruder, RequestedTemp);
+		celsius_t min_temp = (celsius_t)(INACTIVE_EXTRUDER_BASETEMP);
+
+		// limit preheat of other nozzles using INACTIVE_EXTRUDER_BASETEMP
 		if (target_extruder != active_extruder
-			&& temp > INACTIVE_EXTRUDER_MAXTEMP
-      && printJobOngoing())
-		{
-			// limit requested temp to INACTIVE_EXTRUDER_MAXTEMP but cache the desired temp to be applied during tool_change.cpp
-			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", temp, " replacement:", INACTIVE_EXTRUDER_MAXTEMP);
-			thermalManager.cache_target_temp(target_extruder, temp);
+			&& RequestedTemp > min_temp
+      		&& printJobOngoing())
+		{			
+			// limit requested temp to INACTIVE_EXTRUDER_BASETEMP but cache the desired temp to be applied during tool_change.cpp
+			thermalManager.cache_target_temp(target_extruder, RequestedTemp);
 			if (idex_get_carriage(active_extruder) == idex_get_carriage(target_extruder))
 			{
-        // extruder attempting to heat up is on the same carriage as the current one, which might cause it to ooze onto the print.
-        // We cap it's max temp to INACTIVE_EXTRUDER_MAXTEMP until it becomes the active extruder
-				temp = min(temp, (celsius_t)INACTIVE_EXTRUDER_MAXTEMP);
+        		// extruder attempting to heat up is on the same carriage as the current one, which might cause it to ooze onto the print.
+        		// We cap it's max temp to a temp closer to INACTIVE_EXTRUDER_BASETEMP until it becomes the active extruder
+				ReplacementTemp = max((celsius_t)(max_temp - INACTIVE_SHARED_EXTRUDER_OFFSET), min_temp);
+				ReplacementTemp = min(ReplacementTemp, RequestedTemp);
 			}
 			else
 			{
-        // extruder attempting to heat up is NOT on the same carriage, but we don't want it to preheat too early (silly Cura)
-        // We cap it's max temp to midway between INACTIVE_EXTRUDER_MAXTEMP and the target temp until it becomes the active extruder
-				temp = min(temp, (celsius_t)((temp + INACTIVE_EXTRUDER_MAXTEMP) / 2));
+        		// extruder attempting to heat up is NOT on the same carriage, but we don't want it to preheat too early (silly Cura)
+        		// We cap it's max temp to midway between temp and INACTIVE_EXTRUDER_BASETEMP
+				ReplacementTemp = max((celsius_t)(max_temp - INACTIVE_OPPOSITE_EXTRUDER_OFFSET), min_temp);
+				ReplacementTemp = min(ReplacementTemp, RequestedTemp);
 			}
+		}
+		
+		if (ReplacementTemp < (RequestedTemp - 5))
+		{
+			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", RequestedTemp, " replacement:", ReplacementTemp);
+			temp = ReplacementTemp;
 		}
 		else
 		{

@@ -128,6 +128,8 @@
 #endif
 
 #if ENABLED(DUAL_X_CARRIAGE)
+void home_x();
+void home_y_and_present();
 void home_and_clean();
 #endif
 

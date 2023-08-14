@@ -1963,6 +1963,14 @@ void Temperature::task() {
     #endif
   #endif
 
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	// keep data clear when not printing
+	if (!printJobOngoing())
+	{
+		thermalManager.clear_temp_tracking_data();
+	}
+#endif
+
   UNUSED(ms);
 }
 
@@ -3008,6 +3016,10 @@ void Temperature::disable_all_heaters() {
     setTargetCooler(0);
     temp_cooler.soft_pwm_amount = 0;
     WRITE_HEATER_COOLER(LOW);
+  #endif
+
+  #if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	clear_temp_tracking_data();
   #endif
 }
 
@@ -4579,6 +4591,22 @@ void Temperature::isr() {
 
 #if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
 celsius_t Temperature::hotend_cached_temp[HOTENDS] = {0};
+celsius_t Temperature::max_requested_temp[HOTENDS] = {0};
+
+void Temperature::clear_temp_tracking_data()
+{
+	for (int i=0; i< HOTENDS; ++i)
+	{
+		hotend_cached_temp[i] = 0;
+		max_requested_temp[i] = 0;
+	}
+}
+
+celsius_t Temperature::get_max_requested_temp(const int8_t heater_id, celsius_t temp)
+{
+	max_requested_temp[heater_id] = max(max_requested_temp[heater_id], temp);
+	return max_requested_temp[heater_id];
+}
 
 //static const celsius_t hotend_cached_preheat[HOTENDS];
 void Temperature::cache_target_temp(const int8_t heater_id, celsius_t temp)

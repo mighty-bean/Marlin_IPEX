@@ -579,14 +579,18 @@ class Temperature {
       static constexpr millis_t fan_update_interval_ms = TERN(HAS_PWMFANCHECK, 5000, TERN(HAS_FANCHECK, 1000, 2500));
     #endif
 
-	#if INACTIVE_EXTRUDER_MAXTEMP
-    static celsius_t hotend_cached_temp[HOTENDS];
-	  static void cache_target_temp(const int8_t heater_id, celsius_t temp);
-	  static celsius_t get_cached_target_temp(const int8_t heater_id);
-    static void clear_cached_target_temp(const int8_t heater_id);
-	  static celsius_t read_and_clear_cached_target_temp(const int8_t heater_id);  
-	  static void log_cached_target_temps();
-    static void clear_cached_target_temps();
+	#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	static celsius_t hotend_cached_temp[HOTENDS];
+	static celsius_t max_requested_temp[HOTENDS];
+
+	static void clear_temp_tracking_data();
+	static celsius_t get_max_requested_temp(const int8_t heater_id, celsius_t temp);
+	static void cache_target_temp(const int8_t heater_id, celsius_t temp);
+	static celsius_t get_cached_target_temp(const int8_t heater_id);
+	static void clear_cached_target_temp(const int8_t heater_id);
+	static celsius_t read_and_clear_cached_target_temp(const int8_t heater_id);  
+	static void log_cached_target_temps();
+	static void clear_cached_target_temps();
 	#endif
 
   private:

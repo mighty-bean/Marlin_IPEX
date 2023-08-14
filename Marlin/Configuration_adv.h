@@ -793,21 +793,23 @@
 
   #define EXTRUDERS_PER_CARRIAGE (EXTRUDERS>>1)
   
-  // don't allow preheating of other nozzles besides the one actively printing
+  // limit the preheating temp of other nozzles besides the one actively printing
   // set to zero to disable
-  #define INACTIVE_EXTRUDER_MAXTEMP EXTRUDE_MINTEMP
-  #if INACTIVE_EXTRUDER_MAXTEMP > 0
+  #define INACTIVE_EXTRUDER_BASETEMP EXTRUDE_MINTEMP
+  #if INACTIVE_EXTRUDER_BASETEMP > 0
   #define LIMIT_INACTIVE_EXTRUDER_TEMP
+  #define INACTIVE_SHARED_EXTRUDER_OFFSET 25 // reduce temp requests for an unused nozzle on the same carriage by at least this amount
+  #define INACTIVE_OPPOSITE_EXTRUDER_OFFSET 15 // reduce temp requests for an unused nozzle on the opposite carriage by at least this amount
   #endif
 
   // define if each carriage has one shared part cooling fan
   #define ONE_COOLING_FAN_PER_CARRIAGE
 
   // set the number of cleaning swipes to perform over brushes near the XAXIS home position
-  #define TOOL_CHANGE_CLEANING_SWIPES 0 // 0 for none
+  #define TOOL_CHANGE_CLEANING_SWIPES 1 // 0 for none
 
   // set when tool changes should re-home the Y axis as well as X
-   #define TOOL_CHANGE_HOME_Y
+  #define TOOL_CHANGE_HOME_Y
 
   // define the two offsets on the XAXIS from the home position to move between when cleaning using a mounted brush
   #define TOOL_CHANGE_CLEANING_NEAR_OFFSET 5 // how near from the XAXIS home position to move to when cleaning
