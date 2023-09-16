@@ -798,8 +798,8 @@
   #define INACTIVE_EXTRUDER_BASETEMP EXTRUDE_MINTEMP
   #if INACTIVE_EXTRUDER_BASETEMP > 0
   #define LIMIT_INACTIVE_EXTRUDER_TEMP
-  #define INACTIVE_SHARED_EXTRUDER_OFFSET 25 // reduce temp requests for an unused nozzle on the same carriage by at least this amount
-  #define INACTIVE_OPPOSITE_EXTRUDER_OFFSET 15 // reduce temp requests for an unused nozzle on the opposite carriage by at least this amount
+  #define INACTIVE_SHARED_EXTRUDER_OFFSET 50 // reduce temp requests for an unused nozzle on the same carriage by at least this amount
+  #define INACTIVE_OPPOSITE_EXTRUDER_OFFSET 30 // reduce temp requests for an unused nozzle on the opposite carriage by at least this amount
   #endif
 
   // define if each carriage has one shared part cooling fan
@@ -809,11 +809,11 @@
   #define TOOL_CHANGE_CLEANING_SWIPES 1 // 0 for none
 
   // set when tool changes should re-home the Y axis as well as X
-  #define TOOL_CHANGE_HOME_Y
+  // #define TOOL_CHANGE_HOME_Y
 
   // define the two offsets on the XAXIS from the home position to move between when cleaning using a mounted brush
   #define TOOL_CHANGE_CLEANING_NEAR_OFFSET 5 // how near from the XAXIS home position to move to when cleaning
-  #define TOOL_CHANGE_CLEANING_FAR_OFFSET 80 // how far from the XAXIS home position to move to when cleaning
+  #define TOOL_CHANGE_CLEANING_FAR_OFFSET 50 // how far from the XAXIS home position to move to when cleaning
 
  #endif
 
@@ -2563,7 +2563,7 @@
  */
 #if HAS_MULTI_EXTRUDER
   // Z raise distance for tool-change, as needed for some extruders
-  #define TOOLCHANGE_ZRAISE                 2 // (mm)
+  #define TOOLCHANGE_ZRAISE                 0.25 // (mm)
   //#define TOOLCHANGE_ZRAISE_BEFORE_RETRACT  // Apply raise before swap retraction (if enabled)
   #define TOOLCHANGE_NO_RETURN              // Never return to previous position on tool-change
   #if ENABLED(TOOLCHANGE_NO_RETURN)
@@ -2741,8 +2741,8 @@
     #define X_MICROSTEPS     16        // 0..256
     #define X_RSENSE          0.11     // Multiplied x1000 for TMC26X
     #define X_CHAIN_POS      -1        // -1..0: Not chained. 1: MCU MOSI connected. 2: Next in chain, ...
-    //#define X_INTERPOLATE  true      // Enable to override 'INTERPOLATE' for the X axis
-    //#define X_HOLD_MULTIPLIER 0.5    // Enable to override 'HOLD_MULTIPLIER' for the X axis
+    #define X_INTERPOLATE  false      // Enable to override 'INTERPOLATE' for the X axis
+    #define X_HOLD_MULTIPLIER 0.5    // Enable to override 'HOLD_MULTIPLIER' for the X axis
   #endif
 
   #if AXIS_IS_TMC_CONFIG(X2)
@@ -2751,28 +2751,28 @@
     #define X2_MICROSTEPS    X_MICROSTEPS
     #define X2_RSENSE         0.11
     #define X2_CHAIN_POS     -1
-    //#define X2_INTERPOLATE true
-    //#define X2_HOLD_MULTIPLIER 0.5
+    #define X2_INTERPOLATE false
+    #define X2_HOLD_MULTIPLIER 0.5
   #endif
 
   #if AXIS_IS_TMC_CONFIG(Y)
-    #define Y_CURRENT       800
+    #define Y_CURRENT       1000
     #define Y_CURRENT_HOME  Y_CURRENT
     #define Y_MICROSTEPS     16
     #define Y_RSENSE          0.11
     #define Y_CHAIN_POS      -1
-    //#define Y_INTERPOLATE  true
-    //#define Y_HOLD_MULTIPLIER 0.5
+    #define Y_INTERPOLATE  false
+    #define Y_HOLD_MULTIPLIER 0.9
   #endif
 
   #if AXIS_IS_TMC_CONFIG(Y2)
-    #define Y2_CURRENT      800
+    #define Y2_CURRENT      1000
     #define Y2_CURRENT_HOME Y2_CURRENT
     #define Y2_MICROSTEPS    Y_MICROSTEPS
     #define Y2_RSENSE         0.11
     #define Y2_CHAIN_POS     -1
-    //#define Y2_INTERPOLATE true
-    //#define Y2_HOLD_MULTIPLIER 0.5
+    #define Y2_INTERPOLATE false
+    #define Y2_HOLD_MULTIPLIER 0.9
   #endif
 
   #if AXIS_IS_TMC_CONFIG(Z)
@@ -3067,7 +3067,7 @@
    * Define your own with:
    * { <off_time[1..15]>, <hysteresis_end[-3..12]>, hysteresis_start[1..8] }
    */
-  #define CHOPPER_TIMING CHOPPER_DEFAULT_12V        // All axes (override below)
+  #define CHOPPER_TIMING CHOPPER_DEFAULT_24V        // All axes (override below)
   //#define CHOPPER_TIMING_X  CHOPPER_TIMING        // For X Axes (override below)
   //#define CHOPPER_TIMING_X2 CHOPPER_TIMING_X
   //#define CHOPPER_TIMING_Y  CHOPPER_TIMING        // For Y Axes (override below)

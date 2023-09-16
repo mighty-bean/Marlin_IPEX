@@ -856,13 +856,19 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	remember_feedrate_scaling_off();
 	endstops.enable(true); // Enable endstops for next homing move
 
+	if (axis_is_trusted(Y_AXIS) && current_position.y > 20)
+	{
+		current_position.y = 20;
+		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
+		planner.synchronize();
+	}
+
 	homeaxis(Y_AXIS);
 
 	endstops.not_homing();
 	sync_plan_position();
 	// Clear endstop state for polled stallGuard endstops
 	TERN_(SPI_ENDSTOPS, endstops.clear_endstop_state());
-	restore_feedrate_and_scaling();
 
 	set_axis_is_at_home(Y_AXIS);
 
@@ -870,31 +876,47 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 	current_position.y = Y_CENTER + (Y_CENTER/2);
 	line_to_current_position(homing_feedrate(Y_AXIS)); 
 	planner.synchronize();
+	restore_feedrate_and_scaling();
   }
 
   void home_and_clean()
   {
-	home_x();
-
-	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
-#if TOOL_CHANGE_CLEANING_SWIPES > 0
-    const float xhome = x_home_pos(active_extruder);
+	const float xhome = x_home_pos(active_extruder);
 	float CleaningNearPoint = xhome;
 	float CleaningFarPoint = xhome;
+	bool PositionNearHome = false;
 	if (xhome < (X_BED_SIZE >> 1))
 	{
 		CleaningNearPoint = xhome + TOOL_CHANGE_CLEANING_NEAR_OFFSET;
 		CleaningFarPoint = xhome + TOOL_CHANGE_CLEANING_FAR_OFFSET;
+		PositionNearHome = current_position.x <= CleaningFarPoint;
 	}
 	else
 	{
 		CleaningNearPoint = xhome - TOOL_CHANGE_CLEANING_NEAR_OFFSET;
 		CleaningFarPoint = xhome - TOOL_CHANGE_CLEANING_FAR_OFFSET;
+		PositionNearHome = current_position.x >= CleaningFarPoint;
 	}
+
+	if (axis_is_trusted(X_AXIS) && !PositionNearHome)
+	{
+		remember_feedrate_scaling_off();
+		current_position.x = CleaningFarPoint;
+		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
+		planner.synchronize();
+		restore_feedrate_and_scaling();
+	}
+
+	home_x();
+
+	// clean the carriage nozzles over a mounted brush on the XAXIS when specified
+#if TOOL_CHANGE_CLEANING_SWIPES > 0
+	remember_feedrate_scaling_off();
 
 	for (int Swipe=0; Swipe < TOOL_CHANGE_CLEANING_SWIPES; ++Swipe) {
 		// move fast to initial cleaning position near home
 		current_position.x = CleaningFarPoint;
+
 		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
 		planner.synchronize();
 
@@ -903,6 +925,7 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 		line_to_current_position(planner.settings.max_feedrate_mm_s[X_AXIS]);   // move fast
 		planner.synchronize();
 	}
+	restore_feedrate_and_scaling();
 
 	// re-home after cleaning
 	home_x();
