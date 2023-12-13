@@ -45,7 +45,7 @@
   #endif
 #endif
 
-#if ENABLED(SINGLENOZZLE_STANDBY_TEMP)
+#if ENABLED(SINGLENOZZLE_STANDBY_TEMP) || ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
   #include "../../module/tool_change.h"
 #endif
 
@@ -112,49 +112,40 @@ void GcodeSuite::M104_M109(const bool isM109) {
       thermalManager.singlenozzle_temp[target_extruder] = temp;
       if (target_extruder != active_extruder) return;
     #endif
-    
+
 	#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
-		celsius_t RequestedTemp = temp;
-		celsius_t ReplacementTemp = temp;
-		celsius_t max_temp = thermalManager.get_max_requested_temp(target_extruder, RequestedTemp);
-		celsius_t min_temp = (celsius_t)(INACTIVE_EXTRUDER_BASETEMP);
 
-		// limit preheat of other nozzles using INACTIVE_EXTRUDER_BASETEMP
-		if (target_extruder != active_extruder
-			&& RequestedTemp > min_temp
-      		&& printJobOngoing())
-		{			
-			// limit requested temp to INACTIVE_EXTRUDER_BASETEMP but cache the desired temp to be applied during tool_change.cpp
-			thermalManager.cache_target_temp(target_extruder, RequestedTemp);
-			if (idex_get_carriage(active_extruder) == idex_get_carriage(target_extruder))
-			{
-        		// extruder attempting to heat up is on the same carriage as the current one, which might cause it to ooze onto the print.
-        		// We cap it's max temp to a temp closer to INACTIVE_EXTRUDER_BASETEMP until it becomes the active extruder
-				ReplacementTemp = max((celsius_t)(max_temp - INACTIVE_SHARED_EXTRUDER_OFFSET), min_temp);
-				ReplacementTemp = min(ReplacementTemp, RequestedTemp);
-			}
-			else
-			{
-        		// extruder attempting to heat up is NOT on the same carriage, but we don't want it to preheat too early (silly Cura)
-        		// We cap it's max temp to midway between temp and INACTIVE_EXTRUDER_BASETEMP
-				ReplacementTemp = max((celsius_t)(max_temp - INACTIVE_OPPOSITE_EXTRUDER_OFFSET), min_temp);
-				ReplacementTemp = min(ReplacementTemp, RequestedTemp);
-			}
-		}
-		
-		if (ReplacementTemp < (RequestedTemp - 5))
-		{
-			DEBUG_ECHOLNPGM("Caching preheat request: E", target_extruder, " temp:", RequestedTemp, " replacement:", ReplacementTemp);
-			temp = ReplacementTemp;
-		}
-		else
-		{
-			DEBUG_ECHOLNPGM("Honoring heat request: E", target_extruder);
-			thermalManager.clear_cached_target_temp(target_extruder);
-		}
-	#endif
-
+    // set the desired target temp
     thermalManager.setTargetHotend(temp, target_extruder);
+
+    if (printJobOngoing())
+    {
+      // get active extruders (with pair if mirroring)
+      uint8_t active_extruder0 = active_extruder;
+      uint8_t active_extruder1 = active_extruder;
+      if (idex_is_duplicating() && idex_get_carriage(active_extruder0) == 0)
+      {
+        active_extruder1 = idex_get_duplication_extruder(active_extruder0);
+      }
+
+      if (target_extruder == active_extruder0 || target_extruder == active_extruder1)
+      {
+        DEBUG_ECHOLNPGM("Honoring heat request: E", target_extruder);
+        thermalManager.clear_cached_target_temp(target_extruder);
+      }
+      else
+      {
+        no_wait_for_cooling = true;
+      }
+
+      // limit temps of anyone not an active extruder and cache the targets for later
+      dualx_limit_tool_temps(active_extruder0, active_extruder1);
+    }
+    else
+    {
+        thermalManager.clear_cached_target_temp(target_extruder);
+    }
+	#endif
 
     #if ENABLED(DUAL_X_CARRIAGE)
       if (idex_is_duplicating() && idex_get_carriage(target_extruder) == 0)

@@ -795,11 +795,10 @@
   
   // limit the preheating temp of other nozzles besides the one actively printing
   // set to zero to disable
-  #define INACTIVE_EXTRUDER_BASETEMP EXTRUDE_MINTEMP
+  #define INACTIVE_EXTRUDER_BASETEMP 150
   #if INACTIVE_EXTRUDER_BASETEMP > 0
   #define LIMIT_INACTIVE_EXTRUDER_TEMP
-  #define INACTIVE_SHARED_EXTRUDER_OFFSET 50 // reduce temp requests for an unused nozzle on the same carriage by at least this amount
-  #define INACTIVE_OPPOSITE_EXTRUDER_OFFSET 30 // reduce temp requests for an unused nozzle on the opposite carriage by at least this amount
+  #define INACTIVE_EXTRUDER_TEMPERATURE_OFFSET 50 // reduce unused nozzle temps by at least this much
   #endif
 
   // define if each carriage has one shared part cooling fan

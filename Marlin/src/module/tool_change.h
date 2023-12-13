@@ -131,7 +131,11 @@
 void home_x();
 void home_y_and_present();
 void home_and_clean();
+void dualx_limit_tool_temps(const uint8_t active_extruder0, const uint8_t active_extruder1); // set these to the same extruder when not mirroring
+void dualx_pause_for_cooling(const uint8_t active_extruder0, const uint8_t active_extruder1); // set these to the same extruder when not mirroring
 #endif
+
+
 
 /**
  * Perform a tool-change, which may result in moving the

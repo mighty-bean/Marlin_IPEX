@@ -934,6 +934,77 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 
  }
 
+void dualx_limit_tool_temps(const uint8_t active_extruder0, const uint8_t active_extruder1) // set these to the same extruder when not mirroring
+{
+    if (!printJobOngoing())
+    {
+      // do nothing when the printer is being used manually
+      return;
+    }
+
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+	celsius_t min_temp = (celsius_t)(INACTIVE_EXTRUDER_BASETEMP);
+    
+    for (int target_extruder = 0; target_extruder < EXTRUDERS; ++target_extruder)
+    {
+      if (target_extruder != active_extruder0 && target_extruder != active_extruder1)
+      {
+        celsius_t current_target = thermalManager.degTargetHotend(active_extruder);
+		celsius_t max_temp = thermalManager.get_max_requested_temp(target_extruder, current_target);
+        celsius_t limit_temp = current_target;
+
+		// extruder is not the active extruder, which might cause it to ooze onto the print.
+		// We cap it's max temp until it becomes the active extruder
+		limit_temp = max((celsius_t)(max_temp - INACTIVE_EXTRUDER_TEMPERATURE_OFFSET), min_temp);
+		limit_temp = min(current_target, limit_temp);
+
+        if (limit_temp < (current_target + 5))
+        {
+          if (current_target > thermalManager.get_cached_target_temp(target_extruder))
+          {
+            thermalManager.cache_target_temp(target_extruder, current_target);
+            DEBUG_ECHOLNPGM("Caching current temp: E", target_extruder, " temp:", current_target);
+          }
+
+          thermalManager.setTargetHotend(limit_temp, target_extruder);
+        }
+      }
+    }
+
+#endif
+}
+
+void dualx_pause_for_cooling(const uint8_t active_extruder0, const uint8_t active_extruder1) // set these to the same extruder when not mirroring
+{
+    if (!printJobOngoing())
+    {
+      // do nothing when the printer is being used manually
+      return;
+    }
+
+#if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
+    for (int target_extruder = 0; target_extruder < EXTRUDERS; ++target_extruder)
+    {
+      if (target_extruder != active_extruder0 && target_extruder != active_extruder1)
+      {
+        if (idex_get_carriage(active_extruder0) == idex_get_carriage(target_extruder) || idex_get_carriage(active_extruder1) == idex_get_carriage(target_extruder))
+        {
+            celsius_t current_temp = thermalManager.degHotend(target_extruder);
+            celsius_t desired_temp = thermalManager.degHotend(target_extruder);
+           
+            if (current_temp > desired_temp + 5)
+            {
+              DEBUG_ECHOLNPGM("Cooling E", target_extruder, " from:", current_temp, " to:", desired_temp);
+              thermalManager.wait_for_hotend(target_extruder, true);
+              thermalManager.set_heating_message(target_extruder);
+            }
+        }
+      }
+    }
+#endif
+}
+
+
   /**
    * @brief Dual X Tool Change
    * @details Change tools, with extra behavior based on current mode
@@ -966,26 +1037,24 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
 
 	// release any pending preheat for the next extruder
 #if ENABLED(LIMIT_INACTIVE_EXTRUDER_TEMP)
-	if (new_tool != active_extruder)
+	if (new_tool != active_extruder && printJobOngoing())
 	{
-      // determine if we need to cool the current hotend
-      celsius_t current_target = thermalManager.degTargetHotend(active_extruder);
-      if (current_target > INACTIVE_EXTRUDER_BASETEMP)
+      // get active extruders (with pair if mirroring)
+      uint8_t active_extruder0 = new_tool;
+      uint8_t active_extruder1 = new_tool;
+      if (idex_is_duplicating() && idex_get_carriage(active_extruder0) == 0)
       {
-        // cache this temp so we may return to it later if the tool switches back
-        DEBUG_ECHOLNPGM("Caching current temp: E", active_extruder, " temp:", current_target);
-        thermalManager.cache_target_temp(active_extruder, current_target);
-        
-        // apply the cooldown temp
-        DEBUG_ECHOLNPGM("Cooling E", active_extruder, " from:", current_target, " to:", INACTIVE_EXTRUDER_BASETEMP);
-        thermalManager.setTargetHotend(INACTIVE_EXTRUDER_BASETEMP, active_extruder);
-        thermalManager.set_heating_message(active_extruder);
+        active_extruder1 = idex_get_duplication_extruder(active_extruder0);
       }
+
+      // limit temps of anyone not an active extruder
+      dualx_limit_tool_temps(active_extruder0, active_extruder1);
 
       // apply any cached temperature requests to the new hotend
       bool heating_new_hotend = false;
       celsius_t cached_temp = thermalManager.read_and_clear_cached_target_temp(new_tool);
-		  if (cached_temp > 0)
+      celsius_t current_temp = thermalManager.degHotend(new_tool);
+		  if (cached_temp > current_temp)
       {
         // begin preheating new_tool to the cached temperature request
         thermalManager.setTargetHotend(cached_temp, new_tool);
@@ -994,37 +1063,20 @@ void fast_line_to_current(const AxisEnum fr_axis) { _line_to_current(fr_axis, 0.
         heating_new_hotend = true;
       }
 
-      // cool any additional tools on the new carriage
-	  uint8_t new_carriage = idex_get_carriage(new_tool);
-	  HOTEND_LOOP() {
-		if ((idex_get_carriage(e) == new_carriage) && (e != active_extruder) && (e != new_tool))
-		{
-			celsius_t e_target = thermalManager.degTargetHotend(e);
-			if (e_target > INACTIVE_EXTRUDER_BASETEMP)
-			{
-				thermalManager.setTargetHotend(INACTIVE_EXTRUDER_BASETEMP, e);
-			
-				// cache the old temp?
-				if (e_target > thermalManager.get_cached_target_temp(e))
-				{
-					thermalManager.cache_target_temp(e, e_target);
-				}
-			}
-		}
-	  }
-
 		// re-home to delay while we wait for temp changes (with Y allowed, too)
 	#if ENABLED(TOOL_CHANGE_HOME_Y)
 		home_y_and_present();
 	#endif
 
 		// wait for the new toolhead to warm up if needed
-  		if (heating_new_hotend)
+  	if (heating_new_hotend)
 		{
 			DEBUG_ECHOLNPGM("Wait for preheat: E", new_tool);
 			thermalManager.wait_for_hotend(new_tool, true);
 		}        
 
+      // wait to cooldown anyone not an active extruder as needed
+      dualx_pause_for_cooling(active_extruder0, active_extruder1);
 	}
 #endif	
 
